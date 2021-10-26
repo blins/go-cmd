@@ -16,7 +16,7 @@ import (
 type Command interface {
 	// возвращает FlagSet для данной команды
 	GetFlags() *flag.FlagSet
-	// Разбор параметров. Результатом должно стать остаток массива args, которые не относится к данной команде
+	// Разбор параметров (после разбора FlagSet). Результатом должно стать остаток массива args, которые не относится к данной команде
 	ParseArgs(args []string) ([]string, error)
 	// запустить выполнение команды. Если команда асинхронна, то возвращается Waiter (можно использовать sync.WaitGroup), иначе Waiter = nil
 	Run(ctx context.Context) (Waiter, error)
@@ -72,7 +72,13 @@ func ParseAndRun(defaultCmds []string, ctx context.Context) Waiter {
 		cmdName := args[0]
 		if cmdf, ok := GetFabric(cmdName); ok {
 			cmd := cmdf.Create()
-			args, _ = cmd.ParseArgs(args[1:])
+			cmdfs := cmd.GetFlags()
+			err := cmdfs.Parse(args[1:])
+			if err != nil {
+				log.Printf("Error on %v: %v\n", cmdfs.Name(), err)
+				break
+			}
+			args, _ = cmd.ParseArgs(cmdfs.Args())
 			wg.Add(1)
 			go func(c Command) {
 				wait, err := c.Run(ctx)
